@@ -12,9 +12,9 @@ variable "aws_region" {
 module "cloudtrail_watcher" {
   source = "rubysoho07/cloudtrail-watcher/aws"
   # Recommended to pin the module version
-  # version = "0.0.1"
+  # version = "0.0.2"
 
   aws_region        = var.aws_region
-  slack_webhook_url = var.slack_webhook_url
-  trail_bucket_name = var.trail_bucket_name
+  slack_webhook_url = "https://hooks.slack.com/...."
+  trail_bucket_name = "your-existing-bucket-name"
 }

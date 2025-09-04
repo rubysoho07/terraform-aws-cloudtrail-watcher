@@ -1,9 +1,3 @@
-variable "aws_region" {
-  type        = string
-  default     = "us-east-1"
-  description = "AWS Region to deploy CloudTrail Watcher"
-}
-
 variable "resource_prefix" {
   type        = string
   description = "Prefix for resources related with CloudTrail Watcher"

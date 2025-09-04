@@ -7,16 +7,6 @@ terraform {
   }
 }
 
-provider "aws" {
-  region = var.aws_region
-
-  default_tags {
-    tags = {
-      User = "cloudtrail-watcher"
-    }
-  }
-}
-
 data "aws_caller_identity" "current_account" {}
 
 data "aws_region" "current" {}

@@ -55,7 +55,6 @@ The module creates:
 
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|----------|
-| aws_region | AWS Region to deploy CloudTrail Watcher | string | "us-east-1" | no |
 | resource_prefix | Prefix for resources related with CloudTrail Watcher (If not set, 'cloudtrailwatcher-<YOUR_ACCOUNT_ID>') | string | "" | no |
 | slack_webhook_url | Slack Webhook URL (set "DISABLED" to disable) | string | "DISABLED" | no |
 | set_mandatory_tag | Make 'User' tags when resources are created. If you want to enable this feature, set this variable "True" | string | "False" | no |
