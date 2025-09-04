@@ -19,8 +19,32 @@ provider "aws" {
 
 data "aws_caller_identity" "current_account" {}
 
+data "aws_region" "current" {}
+
+data "archive_file" "lambda_function" {
+  type = "zip"
+  source {
+    filename = "${path.module}/index.py"
+    content  = <<EOF
+from cloudtrail_watcher.event_handler import handler
+
+def watcher_handler(event, context):
+    return handler(event, context)
+EOF
+  }
+  output_path = "${path.module}/lambda_function.zip"
+}
+
 locals {
   resource_prefix = var.resource_prefix == "" ? "cloudtrailwatcher-${data.aws_caller_identity.current_account.account_id}" : var.resource_prefix
+}
+
+resource "aws_serverlessapplicationrepository_cloudformation_stack" "cloudtrail_watcher_layer" {
+  name = "cloudtrail-watcher-layer"
+
+  application_id = "arn:aws:serverlessrepo:us-east-1:256724228018:applications/cloudtrail-watcher-lambda-layer"
+
+  capabilities = ["CAPABILITY_IAM", "CAPABILITY_NAMED_IAM"]
 }
 
 resource "aws_lambda_function" "watcher_function" {
@@ -30,7 +54,9 @@ resource "aws_lambda_function" "watcher_function" {
   timeout       = 120
   memory_size   = 512
   runtime       = "python3.12"
-  handler       = "lambda_function.handler"
+  handler       = "index.watcher_handler"
+  filename      = data.archive_file.lambda_function.output_path
+  layers        = [aws_serverlessapplicationrepository_cloudformation_stack.cloudtrail_watcher_layer.outputs["WatcherLayerArn"]]
   environment {
     variables = {
       SNS_TOPIC_ARN             = aws_sns_topic.watcher_sns_topic.arn
@@ -48,11 +74,12 @@ resource "aws_lambda_permission" "watcher_function_permission" {
 }
 
 resource "aws_s3_bucket" "watcher_logs_bucket" {
+  count  = var.create_trail ? 1 : 0
   bucket = local.resource_prefix
 }
 
 resource "aws_s3_bucket_notification" "watcher_logs_bucket_notification" {
-  bucket = aws_s3_bucket.watcher_logs_bucket.id
+  bucket = var.create_trail ? aws_s3_bucket.watcher_logs_bucket[0].id : var.trail_bucket_name
 
   lambda_function {
     lambda_function_arn = aws_lambda_function.watcher_function.arn
@@ -63,7 +90,8 @@ resource "aws_s3_bucket_notification" "watcher_logs_bucket_notification" {
 }
 
 resource "aws_s3_bucket_lifecycle_configuration" "watcher_logs_bucket_lifecycle" {
-  bucket = aws_s3_bucket.watcher_logs_bucket.id
+  count  = var.create_trail ? 1 : 0
+  bucket = aws_s3_bucket.watcher_logs_bucket[0].id
 
   rule {
     id     = "DeleteLogAfter1Year"
@@ -71,11 +99,14 @@ resource "aws_s3_bucket_lifecycle_configuration" "watcher_logs_bucket_lifecycle"
     expiration {
       days = 365
     }
+
+    filter {}
   }
 }
 
 resource "aws_s3_bucket_policy" "watcher_logs_bucket_policy" {
-  bucket = aws_s3_bucket.watcher_logs_bucket.id
+  count  = var.create_trail ? 1 : 0
+  bucket = aws_s3_bucket.watcher_logs_bucket[0].id
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -85,24 +116,26 @@ resource "aws_s3_bucket_policy" "watcher_logs_bucket_policy" {
           Service = "cloudtrail.amazonaws.com"
         }
         Action   = "s3:GetBucketAcl"
-        Resource = aws_s3_bucket.watcher_logs_bucket.arn
-        }, {
+        Resource = aws_s3_bucket.watcher_logs_bucket[0].arn
+      },
+      {
         Effect = "Allow"
         Principal = {
           Service = "cloudtrail.amazonaws.com"
         }
         Action   = "s3:PutObject"
-        Resource = "${aws_s3_bucket.watcher_logs_bucket.arn}/*"
+        Resource = "${aws_s3_bucket.watcher_logs_bucket[0].arn}/*"
       }
     ]
   })
 }
 
 resource "aws_cloudtrail" "watcher_trail" {
-  depends_on = [aws_s3_bucket_policy.watcher_logs_bucket_policy]
+  count      = var.create_trail ? 1 : 0
+  depends_on = [aws_s3_bucket_policy.watcher_logs_bucket_policy[0]]
 
   name                          = local.resource_prefix
-  s3_bucket_name                = aws_s3_bucket.watcher_logs_bucket.id
+  s3_bucket_name                = aws_s3_bucket.watcher_logs_bucket[0].id
   enable_logging                = true
   is_multi_region_trail         = true
   include_global_service_events = true
@@ -138,6 +171,11 @@ resource "aws_iam_role_policy_attachment" "lambda_role" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
 }
 
+resource "aws_iam_role_policy_attachment" "lambda_resource_policy" {
+  role       = aws_iam_role.watcher_function_role.name
+  policy_arn = aws_serverlessapplicationrepository_cloudformation_stack.cloudtrail_watcher_layer.outputs["WatcherFunctionPolicyArn"]
+}
+
 resource "aws_iam_role_policy" "watcher_function_policy" {
   name = "${local.resource_prefix}-policy"
   role = aws_iam_role.watcher_function_role.id
@@ -147,52 +185,12 @@ resource "aws_iam_role_policy" "watcher_function_policy" {
       {
         Effect   = "Allow"
         Action   = "s3:GetObject"
-        Resource = "${aws_s3_bucket.watcher_logs_bucket.arn}/*"
+        Resource = var.create_trail ? "${aws_s3_bucket.watcher_logs_bucket[0].arn}/*" : "arn:aws:s3:::${var.trail_bucket_name}/*"
       },
       {
         Effect   = "Allow"
         Action   = "sns:Publish"
         Resource = aws_sns_topic.watcher_sns_topic.arn
-      },
-      {
-        Effect = "Allow"
-        Action = [
-          "lambda:ListTags",
-          "lambda:TagResource",
-          "s3:GetBucketTagging",
-          "s3:PutBucketTagging",
-          "ec2:DescribeNetworkInterfaces",
-          "ec2:DescribeTags",
-          "ec2:DescribeVolumes",
-          "ec2:DescribeInstances",
-          "ec2:DescribeSecurityGroups",
-          "ec2:CreateTags",
-          "elasticache:AddTagsToResource",
-          "rds:AddTagsToResource",
-          "elasticmapreduce:AddTags",
-          "redshift:CreateTags",
-          "ecs:TagResource",
-          "eks:TagResource",
-          "iam:ListUserTags",
-          "iam:ListRoleTags",
-          "iam:ListPolicyTags",
-          "iam:ListInstanceProfileTags",
-          "iam:TagUser",
-          "iam:TagRole",
-          "iam:TagPolicy",
-          "iam:TagInstanceProfile",
-          "iam:ListAccountAliases",
-          "kafka:TagResource",
-          "airflow:TagResource",
-          "dynamodb:TagResource",
-          "elasticloadbalancing:DescribeTags",
-          "elasticloadbalancing:AddTags",
-          "cloudfront:ListTagsForResource",
-          "cloudfront:TagResource",
-          "ecr:ListTagsForResource",
-          "ecr:TagResource"
-        ]
-        Resource = "*"
       }
     ]
   })
