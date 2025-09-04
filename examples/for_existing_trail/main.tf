@@ -14,7 +14,6 @@ module "cloudtrail_watcher" {
   # Recommended to pin the module version
   # version = "0.0.2"
 
-  aws_region        = var.aws_region
   slack_webhook_url = "https://hooks.slack.com/...."
   trail_bucket_name = "your-existing-bucket-name"
 }
