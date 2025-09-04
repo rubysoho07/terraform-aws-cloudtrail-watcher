@@ -29,13 +29,13 @@ variable "slack_webhook_url" {
 variable "set_mandatory_tag" {
   type        = string
   description = "Set mandatory tags when resources are created."
-  default     = "DISABLED"
+  default     = "False"
 }
 
 variable "disable_autoscaling_alarm" {
   type        = string
   description = "Disable alarm for resources created by autoscaling"
-  default     = "DISABLED"
+  default     = "False"
 }
 
 variable "trail_bucket_name" {
