@@ -22,8 +22,16 @@ data "aws_caller_identity" "current_account" {}
 data "aws_region" "current" {}
 
 data "archive_file" "lambda_function" {
-  type        = "zip"
-  source_file = "${path.module}/index.py"
+  type = "zip"
+  source {
+    filename = "${path.module}/index.py"
+    content  = <<EOF
+from cloudtrail_watcher.event_handler import handler
+
+def watcher_handler(event, context):
+    return handler(event, context)
+EOF
+  }
   output_path = "${path.module}/lambda_function.zip"
 }
 
@@ -34,7 +42,7 @@ locals {
 resource "aws_serverlessapplicationrepository_cloudformation_stack" "cloudtrail_watcher_layer" {
   name = "cloudtrail-watcher-layer"
 
-  application_id = "arn:aws:serverlessrepo:${data.aws_region.current.region}:256724228018:applications/cloudtrail-watcher-lambda-layer"
+  application_id = "arn:aws:serverlessrepo:us-east-1:256724228018:applications/cloudtrail-watcher-lambda-layer"
 
   capabilities = ["CAPABILITY_IAM", "CAPABILITY_NAMED_IAM"]
 }
@@ -65,13 +73,13 @@ resource "aws_lambda_permission" "watcher_function_permission" {
   principal     = "s3.amazonaws.com"
 }
 
-# resource "aws_s3_bucket" "watcher_logs_bucket" {
-#   bucket = local.resource_prefix
-# }
+resource "aws_s3_bucket" "watcher_logs_bucket" {
+  count  = var.create_trail ? 1 : 0
+  bucket = local.resource_prefix
+}
 
 resource "aws_s3_bucket_notification" "watcher_logs_bucket_notification" {
-  # bucket = var.trail_bucket_name == "DISABLED" ? aws_s3_bucket.watcher_logs_bucket.id : var.trail_bucket_name
-  bucket = var.trail_bucket_name
+  bucket = var.create_trail ? aws_s3_bucket.watcher_logs_bucket[0].id : var.trail_bucket_name
 
   lambda_function {
     lambda_function_arn = aws_lambda_function.watcher_function.arn
@@ -81,56 +89,61 @@ resource "aws_s3_bucket_notification" "watcher_logs_bucket_notification" {
   depends_on = [aws_lambda_permission.watcher_function_permission]
 }
 
-# resource "aws_s3_bucket_lifecycle_configuration" "watcher_logs_bucket_lifecycle" {
-#   bucket = aws_s3_bucket.watcher_logs_bucket.id
+resource "aws_s3_bucket_lifecycle_configuration" "watcher_logs_bucket_lifecycle" {
+  count  = var.create_trail ? 1 : 0
+  bucket = aws_s3_bucket.watcher_logs_bucket[0].id
 
-#   rule {
-#     id     = "DeleteLogAfter1Year"
-#     status = "Enabled"
-#     expiration {
-#       days = 365
-#     }
-#   }
-# }
+  rule {
+    id     = "DeleteLogAfter1Year"
+    status = "Enabled"
+    expiration {
+      days = 365
+    }
 
-# resource "aws_s3_bucket_policy" "watcher_logs_bucket_policy" {
-#   bucket = aws_s3_bucket.watcher_logs_bucket.id
-#   policy = jsonencode({
-#     Version = "2012-10-17"
-#     Statement = [
-#       {
-#         Effect = "Allow"
-#         Principal = {
-#           Service = "cloudtrail.amazonaws.com"
-#         }
-#         Action   = "s3:GetBucketAcl"
-#         Resource = aws_s3_bucket.watcher_logs_bucket.arn
-#       },
-#       {
-#         Effect = "Allow"
-#         Principal = {
-#           Service = "cloudtrail.amazonaws.com"
-#         }
-#         Action   = "s3:PutObject"
-#         Resource = "${aws_s3_bucket.watcher_logs_bucket.arn}/*"
-#       }
-#     ]
-#   })
-# }
+    filter {}
+  }
+}
 
-# resource "aws_cloudtrail" "watcher_trail" {
-#   depends_on = [aws_s3_bucket_policy.watcher_logs_bucket_policy]
+resource "aws_s3_bucket_policy" "watcher_logs_bucket_policy" {
+  count  = var.create_trail ? 1 : 0
+  bucket = aws_s3_bucket.watcher_logs_bucket[0].id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Principal = {
+          Service = "cloudtrail.amazonaws.com"
+        }
+        Action   = "s3:GetBucketAcl"
+        Resource = aws_s3_bucket.watcher_logs_bucket[0].arn
+      },
+      {
+        Effect = "Allow"
+        Principal = {
+          Service = "cloudtrail.amazonaws.com"
+        }
+        Action   = "s3:PutObject"
+        Resource = "${aws_s3_bucket.watcher_logs_bucket[0].arn}/*"
+      }
+    ]
+  })
+}
 
-#   name                          = local.resource_prefix
-#   s3_bucket_name                = aws_s3_bucket.watcher_logs_bucket.id
-#   enable_logging                = true
-#   is_multi_region_trail         = true
-#   include_global_service_events = true
+resource "aws_cloudtrail" "watcher_trail" {
+  count      = var.create_trail ? 1 : 0
+  depends_on = [aws_s3_bucket_policy.watcher_logs_bucket_policy[0]]
 
-#   event_selector {
-#     read_write_type = "WriteOnly"
-#   }
-# }
+  name                          = local.resource_prefix
+  s3_bucket_name                = aws_s3_bucket.watcher_logs_bucket[0].id
+  enable_logging                = true
+  is_multi_region_trail         = true
+  include_global_service_events = true
+
+  event_selector {
+    read_write_type = "WriteOnly"
+  }
+}
 
 resource "aws_sns_topic" "watcher_sns_topic" {
   name = local.resource_prefix
@@ -172,8 +185,7 @@ resource "aws_iam_role_policy" "watcher_function_policy" {
       {
         Effect   = "Allow"
         Action   = "s3:GetObject"
-        Resource = "arn:aws:s3:::${var.trail_bucket_name}/*"
-        # Resource = "${aws_s3_bucket.watcher_logs_bucket.arn}/*"
+        Resource = var.create_trail ? "${aws_s3_bucket.watcher_logs_bucket[0].arn}/*" : "arn:aws:s3:::${var.trail_bucket_name}/*"
       },
       {
         Effect   = "Allow"

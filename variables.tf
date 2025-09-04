@@ -43,3 +43,9 @@ variable "trail_bucket_name" {
   description = "The name of the S3 bucket used by CloudTrail to store log files."
   default     = "DISABLED"
 }
+
+variable "create_trail" {
+  type        = bool
+  default     = false
+  description = "Whether to create a new CloudTrail trail. If false, you must set trail_bucket_name variable."
+}
