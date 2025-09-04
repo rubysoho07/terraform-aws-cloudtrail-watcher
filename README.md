@@ -16,6 +16,29 @@ This module uses Lambda Layer deployed in Serverless Application Repository.
 - **Resource tagging**: Optional automatic tagging of AWS resources
 - **AutoScaling integration**: Can disable alarms for AutoScaling-created resources
 
+## Supported events & resources
+
+(Only support events when a resource created)
+
+* Console Login (Success/Failure)
+* IAM (User, Group, Role, Policy, Instance Profile)
+* EC2 (Instance, Security Group)
+* RDS (Cluster, Instance)
+* S3 (Bucket)
+* ElastiCache (Redis, Memcached)
+* EMR (Cluster)
+* Lambda (Function)
+* Redshift (Cluster)
+* ECS (Cluster)
+* EKS (Cluster)
+* DocumentDB (Cluster, Instance)
+* MSK(Managed Streaming for Apache Kafka) (Cluster)
+* MWAA(Managed Workflow for Apache Airflow) (Environment)
+* DynamoDB (Table)
+* ELB (CLB, ALB, NLB, GLB)
+* CloudFront (Distribution)
+* ECR (Repository)
+
 ## Architecture
 
 ![Architecture](https://github.com/rubysoho07/cloudtrail-watcher/raw/main/cloudtrail-watcher-architecture.png)
