@@ -32,7 +32,8 @@ locals {
 resource "aws_serverlessapplicationrepository_cloudformation_stack" "cloudtrail_watcher_layer" {
   name = "cloudtrail-watcher-layer"
 
-  application_id = "arn:aws:serverlessrepo:us-east-1:256724228018:applications/cloudtrail-watcher-lambda-layer"
+  application_id   = "arn:aws:serverlessrepo:us-east-1:256724228018:applications/cloudtrail-watcher-lambda-layer"
+  semantic_version = "0.1.0"
 
   capabilities = ["CAPABILITY_IAM", "CAPABILITY_NAMED_IAM"]
 }
