@@ -1,0 +1,44 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      semantic_version:
+        description: 'Semantic version (e.g., 0.1.2)'
+        required: true
+        type: string
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update semantic version
+        run: |
+          sed -i 's/semantic_version = "[^"]*"/semantic_version = "${{ inputs.semantic_version }}"/' main.tf
+
+      - name: Commit changes
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add main.tf
+          git commit -m "Update semantic version to ${{ inputs.semantic_version }}"
+          git push
+
+      - name: Create tag
+        run: |
+          git tag v${{ inputs.semantic_version }}
+          git push origin v${{ inputs.semantic_version }}
+
+      - name: Create release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: v${{ inputs.semantic_version }}
+          release_name: Release v${{ inputs.semantic_version }}
+          draft: false
+          prerelease: false
