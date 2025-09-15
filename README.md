@@ -49,7 +49,7 @@ The module creates:
 - IAM roles and policies for secure access
 - S3 bucket notifications to trigger Lambda processing
 - (Optional) CloudTrail for API logging
-- (Optional) S3 bucket for CloudTrail log storage
+- (Optional) S3 bucket for CloudTrail log storage (with a lifecycle: delete objects after 365 days)
 
 ## Variables
 
