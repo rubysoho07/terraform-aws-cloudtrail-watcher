@@ -1,6 +1,8 @@
 # CloudTrail Watcher Terraform Module
 
-A Terraform module that monitors AWS CloudTrail logs and sends notifications when specific events occur. This module automatically processes CloudTrail logs stored in S3 and can send alerts via SNS and Slack when important AWS API activities are detected.
+한국어 버전: [README.ko.md](./README.ko.md)
+
+A Terraform module that monitors AWS CloudTrail logs and sends notifications when resource creation events occur. This module automatically processes CloudTrail logs stored in S3 and can send alerts via SNS and Slack when Console login and AWS API activities of resource creation are detected.
 
 This module uses Lambda Layer deployed in Serverless Application Repository. 
 
@@ -13,7 +15,7 @@ This module uses Lambda Layer deployed in Serverless Application Repository.
 - **Lambda-based processing**: Uses AWS Lambda to analyze CloudTrail events efficiently
 - **Multiple notification channels**: Supports both SNS topics and Slack webhooks for alerts
 - **Flexible deployment**: Can create a new CloudTrail or work with existing trails
-- **Resource tagging**: Optional automatic tagging of AWS resources
+- **Resource tagging**: Optional automatic tagging of AWS resources (Automatically add `User` tag for resources)
 - **AutoScaling integration**: Can disable alarms for AutoScaling-created resources
 
 ## Supported events & resources
@@ -46,7 +48,7 @@ This module uses Lambda Layer deployed in Serverless Application Repository.
 The module creates:
 - AWS Lambda function to process CloudTrail logs
 - SNS topic for notifications
-- IAM roles and policies for secure access
+- IAM roles and policies for a Lambda Function
 - S3 bucket notifications to trigger Lambda processing
 - (Optional) CloudTrail for API logging
 - (Optional) S3 bucket for CloudTrail log storage (with a lifecycle: delete objects after 365 days)
@@ -59,14 +61,13 @@ The module creates:
 | slack_webhook_url | Slack Webhook URL (set "DISABLED" to disable) | string | "DISABLED" | no |
 | set_mandatory_tag | Make 'User' tags when resources are created. If you want to enable this feature, set this variable "True" | string | "False" | no |
 | disable_autoscaling_alarm | Ignore alarm for resources created by autoscaling. If you want to enable this feature, set this variable "True" | string | "False" | no |
-| trail_bucket_name | S3 bucket name for existing CloudTrail (required if create_trail = false) | string | "DISABLED" | no |
+| trail_bucket_name | S3 bucket name for existing CloudTrail (required if `create_trail = false`) | string | "DISABLED" | no |
 | create_trail | Whether to create a new CloudTrail trail and S3 bucket | bool | false | no |
 
 ## Requirements
 
 - Terraform >= 0.12
 - AWS Provider >= 2.0.0
-- Appropriate AWS credentials and permissions
 
 ## Permissions
 
