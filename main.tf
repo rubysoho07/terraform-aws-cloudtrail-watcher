@@ -14,7 +14,7 @@ data "aws_region" "current" {}
 data "archive_file" "lambda_function" {
   type = "zip"
   source {
-    filename = "${path.module}/index.py"
+    filename = "index.py"
     content  = <<EOF
 from cloudtrail_watcher.event_handler import handler
 
